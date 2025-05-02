@@ -1,0 +1,34 @@
+# Prevent directory listing
+Options -Indexes
+
+# Set default character encoding
+AddDefaultCharset UTF-8
+
+# Protect PHP data files from direct access
+<FilesMatch "^\.">
+    Order allow,deny
+    Deny from all
+</FilesMatch>
+
+# Deny access to .php files in data directory
+<FilesMatch "^data/.*\.php$">
+    Order allow,deny
+    Deny from all
+</FilesMatch>
+
+# Ensure PHP errors are not displayed to visitors
+php_flag display_errors off
+
+# Enable clean URLs (if needed later)
+<IfModule mod_rewrite.c>
+    RewriteEngine On
+    RewriteBase /
+    
+    # Redirect to non-www version (if needed)
+    # RewriteCond %{HTTP_HOST} ^www\.(.*)$ [NC]
+    # RewriteRule ^(.*)$ https://%1/$1 [R=301,L]
+    
+    # Prevent direct access to PHP files in data directory
+    RewriteCond %{REQUEST_URI} ^/data/.*\.php$
+    RewriteRule .* - [F,L]
+</IfModule>
