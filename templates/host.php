@@ -1,13 +1,12 @@
 <?php $content = 'host.php'; ?>
-<form method="POST" class="space-y-4">
-    <div>
-        <label class="block text-gray-700 mb-2">Your Name</label>
+<form method="POST" class="mt-3">
+    <div class="mb-3">
+        <label class="form-label fw-medium">Host Name</label>
         <input type="text" name="hostName" required 
-               class="w-full p-2 border rounded-lg" 
-               placeholder="Enter your name">
+               class="form-control form-control-lg"
+               placeholder="Your name">
     </div>
-    <button type="submit" 
-            class="w-full bg-blue-500 text-white p-2 rounded-lg hover:bg-blue-600 transition-colors">
+    <button type="submit" class="btn btn-primary w-100 py-3">
         Create Game
     </button>
 </form>
