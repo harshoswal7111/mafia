@@ -525,47 +525,61 @@ $mafiaPlayers = array_filter($game['players'], function($player) {
     <div class="mb-6">
         <h3 class="text-lg font-bold mb-3 text-red-900">Players</h3>
         <div class="overflow-x-auto">
-            <table class="w-full bg-white rounded-lg overflow-hidden">
-                <thead class="bg-gray-50">
-                    <tr>
-                        <th class="py-3 px-4 border-b border-gray-200 text-left text-sm font-semibold">Player</th>
-                        <th class="py-3 px-4 border-b border-gray-200 text-left text-sm font-semibold">Status</th>
-                        <?php if ($phase === 'end'): ?>
-                            <th class="py-3 px-4 border-b border-gray-200 text-left text-sm font-semibold">Role</th>
-                        <?php endif; ?>
-                    </tr>
-                </thead>
-                <tbody>
-                    <?php foreach ($game['players'] as $playerId => $player): ?>
-                        <tr>
-                            <td class="py-3 px-4 border-b border-gray-200">
-                                <div class="flex items-center">
-                                    <span class="font-medium">
-                                        <?php echo htmlspecialchars($player['name']); ?>
-                                    </span>
-                                    <?php if ($playerId === $currentPlayerId): ?> 
-                                        <span class="ml-1 text-xs font-semibold text-blue-600">(You)</span> 
-                                    <?php endif; ?>
-                                    <?php if ($playerId === $game['hostPlayerId']): ?> 
-                                        <span class="ml-1 text-xs font-semibold text-red-800">(Host)</span> 
-                                    <?php endif; ?>
-                                    <?php if (isset($game['sheriff']) && $playerId === $game['sheriff'] && ($phase === 'end' || $playerId === $currentPlayerId)): ?> 
-                                        <span class="sheriff-badge ml-1" title="Sheriff">👮</span> 
-                                    <?php endif; ?>
-                                </div>
-                            </td>
-                            <td class="py-3 px-4 border-b border-gray-200 font-semibold <?php echo $player['status'] === 'alive' ? 'text-green-600' : 'text-red-600'; ?>">
-                                <?php echo ucfirst($player['status']); ?>
-                            </td>
-                            <?php if ($phase === 'end'): ?>
-                                <td class="py-3 px-4 border-b border-gray-200">
-                                    <?php echo getRoleDisplayName($player['role']); ?>
-                                </td>
+            <?php foreach ($game['players'] as $playerId => $playerData): ?>
+                <div class="player-card <?php echo $playerData['status'] === 'dead' ? 'opacity-50' : ''; ?> <?php echo $playerId === $currentPlayerId ? 'border-2 border-blue-500' : ''; ?> mb-3 p-3 bg-white rounded-lg shadow flex items-center">
+                    <!-- Player photo or initials -->
+                    <?php if (!empty($playerData['photoPath'])): ?>
+                        <div class="w-12 h-12 rounded-full overflow-hidden bg-gray-200 mr-3 flex-shrink-0">
+                            <img src="<?php echo $playerData['photoPath']; ?>" alt="Profile" class="w-full h-full object-cover">
+                        </div>
+                    <?php else: ?>
+                        <div class="w-12 h-12 rounded-full flex items-center justify-center bg-blue-600 text-white font-bold mr-3 flex-shrink-0">
+                            <?php 
+                            $initials = '';
+                            $nameParts = explode(' ', $playerData['name']);
+                            foreach ($nameParts as $part) {
+                                if (!empty($part)) {
+                                    $initials .= strtoupper(substr($part, 0, 1));
+                                    if (strlen($initials) >= 2) break;
+                                }
+                            }
+                            echo htmlspecialchars(strlen($initials) > 0 ? $initials : substr($playerData['name'], 0, 2));
+                            ?>
+                        </div>
+                    <?php endif; ?>
+                    
+                    <div class="flex-grow">
+                        <div class="flex justify-between items-center">
+                            <span class="font-medium <?php echo $playerId === $game['hostPlayerId'] ? 'text-red-600' : ''; ?>">
+                                <?php echo htmlspecialchars($playerData['name']); ?>
+                                <?php if ($playerId === $game['hostPlayerId']): ?>
+                                    <span class="text-xs">(Host)</span>
+                                <?php endif; ?>
+                            </span>
+                            
+                            <?php if ($playerData['status'] === 'dead'): ?>
+                                <span class="text-xs font-medium text-red-600">Dead</span>
                             <?php endif; ?>
-                        </tr>
-                    <?php endforeach; ?>
-                </tbody>
-            </table>
+                        </div>
+                        
+                        <?php if ($phase === 'end'): ?>
+                            <div class="text-xs text-gray-700">
+                                <?php echo ucfirst($playerData['role'] ?? 'Unknown'); ?>
+                            </div>
+                        <?php endif; ?>
+                    </div>
+                    
+                    <?php if ($isHost && $playerData['status'] === 'alive' && $playerId !== $currentPlayerId): ?>
+                        <form action="index.php?action=remove_player" method="post" class="ml-2" onsubmit="return confirm('Are you sure you want to remove this player from the game?');">
+                            <input type="hidden" name="gameCode" value="<?php echo $gameCode; ?>">
+                            <input type="hidden" name="playerId" value="<?php echo $playerId; ?>">
+                            <button type="submit" class="px-3 py-1 bg-red-600 text-white text-sm rounded hover:bg-red-700">
+                                Remove
+                            </button>
+                        </form>
+                    <?php endif; ?>
+                </div>
+            <?php endforeach; ?>
         </div>
     </div>
 

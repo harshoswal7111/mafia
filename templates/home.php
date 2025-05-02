@@ -1,48 +1,58 @@
 <?php require_once 'templates/layout.php'; ?>
 
 <div class="flex flex-col gap-6">
-    <!-- Host a game -->
-    <div class="w-full bg-white p-6 rounded-lg shadow-md">
-        <h2 class="text-xl font-bold mb-4 text-red-900">Host a New Game</h2>
-        <form action="index.php?action=host" method="post">
-            <div class="mb-4">
-                <label for="hostName" class="block text-gray-700 text-base font-bold mb-2">Your Name</label>
-                <input type="text" name="hostName" id="hostName" 
-                       class="shadow appearance-none border rounded w-full py-3 px-4 text-gray-700 leading-tight focus:outline-none focus:shadow-outline"
-                       required minlength="2" maxlength="20">
-            </div>
-            <div class="flex justify-center">
-                <button type="submit" class="bg-red-900 hover:bg-red-800 text-white font-bold py-3 px-6 rounded-lg focus:outline-none focus:shadow-outline w-full sm:w-auto text-lg">
-                    Host Game
-                </button>
-            </div>
-        </form>
-    </div>
+    <!-- Host a Game -->
+    <form action="index.php?action=create_game" method="post" class="bg-white p-6 rounded-lg shadow-lg mb-8" enctype="multipart/form-data">
+        <h2 class="text-2xl font-bold text-red-900 mb-6">Host a New Game</h2>
+        
+        <div class="mb-6">
+            <label for="hostName" class="block text-lg font-medium text-gray-700 mb-2">Your Name</label>
+            <input type="text" id="hostName" name="hostName" required
+                   class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-red-500"
+                   placeholder="Enter your name">
+        </div>
+        
+        <div class="mb-6">
+            <label for="profilePhoto" class="block text-lg font-medium text-gray-700 mb-2">Profile Photo (Optional)</label>
+            <input type="file" id="profilePhoto" name="profilePhoto" accept="image/*"
+                   class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-red-500">
+            <p class="mt-1 text-sm text-gray-500">Upload a profile photo or we'll use your initials.</p>
+        </div>
+        
+        <button type="submit" class="w-full bg-red-900 hover:bg-red-800 text-white font-bold py-4 px-6 rounded-lg text-lg">
+            Create Game
+        </button>
+    </form>
 
-    <!-- Join a game -->
-    <div class="w-full bg-white p-6 rounded-lg shadow-md">
-        <h2 class="text-xl font-bold mb-4 text-red-900">Join a Game</h2>
-        <form action="index.php?action=join" method="post">
-            <div class="mb-4">
-                <label for="gameCode" class="block text-gray-700 text-base font-bold mb-2">Game Code</label>
-                <input type="text" name="gameCode" id="gameCode" 
-                       class="shadow appearance-none border rounded w-full py-3 px-4 text-gray-700 leading-tight focus:outline-none focus:shadow-outline uppercase"
-                       required minlength="5" maxlength="5" placeholder="ABCDE"
-                       autocomplete="off" autocapitalize="characters">
-            </div>
-            <div class="mb-4">
-                <label for="playerName" class="block text-gray-700 text-base font-bold mb-2">Your Name</label>
-                <input type="text" name="playerName" id="playerName" 
-                       class="shadow appearance-none border rounded w-full py-3 px-4 text-gray-700 leading-tight focus:outline-none focus:shadow-outline"
-                       required minlength="2" maxlength="20">
-            </div>
-            <div class="flex justify-center">
-                <button type="submit" class="bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 px-6 rounded-lg focus:outline-none focus:shadow-outline w-full sm:w-auto text-lg">
-                    Join Game
-                </button>
-            </div>
-        </form>
-    </div>
+    <!-- Join a Game -->
+    <form action="index.php?action=join_game" method="post" class="bg-white p-6 rounded-lg shadow-lg" enctype="multipart/form-data">
+        <h2 class="text-2xl font-bold text-red-900 mb-6">Join Existing Game</h2>
+        
+        <div class="mb-6">
+            <label for="gameCode" class="block text-lg font-medium text-gray-700 mb-2">Game Code</label>
+            <input type="text" id="gameCode" name="gameCode" required
+                   class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-red-500 uppercase tracking-widest"
+                   placeholder="Enter game code" maxlength="6">
+        </div>
+        
+        <div class="mb-6">
+            <label for="playerName" class="block text-lg font-medium text-gray-700 mb-2">Your Name</label>
+            <input type="text" id="playerName" name="playerName" required
+                   class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-red-500"
+                   placeholder="Enter your name">
+        </div>
+        
+        <div class="mb-6">
+            <label for="joinProfilePhoto" class="block text-lg font-medium text-gray-700 mb-2">Profile Photo (Optional)</label>
+            <input type="file" id="joinProfilePhoto" name="profilePhoto" accept="image/*"
+                   class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-red-500">
+            <p class="mt-1 text-sm text-gray-500">Upload a profile photo or we'll use your initials.</p>
+        </div>
+        
+        <button type="submit" class="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-4 px-6 rounded-lg text-lg">
+            Join Game
+        </button>
+    </form>
 </div>
 
 <div class="mt-8 bg-white p-6 rounded-lg shadow-md">

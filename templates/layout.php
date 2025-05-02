@@ -74,7 +74,7 @@
     </div>
 
     <footer class="bg-gray-800 text-white text-center p-4 mt-auto text-sm">
-        <p>&copy; <?php echo date('Y'); ?> Mafia Game Facilitator</p>
+        <p>&copy; <?php echo date('Y'); ?> Harsh Oswal</p>
     </footer>
 </body>
 </html>

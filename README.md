@@ -70,4 +70,4 @@ This project is open source and available for free use and modification.
 
 ## Credits
 
-Created by [Your Name]
+Created by Harsh Oswal

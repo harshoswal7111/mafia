@@ -26,7 +26,42 @@ switch ($action) {
                 exit;
             }
             
-            $gameCode = $gameState->createGame($hostName);
+            // Handle photo upload
+            $photoPath = null;
+            if (isset($_FILES['hostPhoto']) && $_FILES['hostPhoto']['error'] === UPLOAD_ERR_OK) {
+                $tempName = $_FILES['hostPhoto']['tmp_name'];
+                $fileName = $_FILES['hostPhoto']['name'];
+                $fileSize = $_FILES['hostPhoto']['size'];
+                $fileType = $_FILES['hostPhoto']['type'];
+                
+                // Validate file type and size
+                $allowedTypes = ['image/jpeg', 'image/png', 'image/gif'];
+                $maxSize = 2 * 1024 * 1024; // 2MB
+                
+                if (!in_array($fileType, $allowedTypes)) {
+                    $_SESSION['error'] = "Only JPG, PNG, and GIF images are allowed.";
+                    header('Location: index.php');
+                    exit;
+                }
+                
+                if ($fileSize > $maxSize) {
+                    $_SESSION['error'] = "File size must be less than 2MB.";
+                    header('Location: index.php');
+                    exit;
+                }
+                
+                // Generate unique file name
+                $extension = pathinfo($fileName, PATHINFO_EXTENSION);
+                $newFileName = uniqid('player_') . '.' . $extension;
+                $targetPath = __DIR__ . '/data/images/' . $newFileName;
+                
+                // Move uploaded file
+                if (move_uploaded_file($tempName, $targetPath)) {
+                    $photoPath = 'data/images/' . $newFileName;
+                }
+            }
+            
+            $gameCode = $gameState->createGame($hostName, $photoPath);
             
             // Store game code and player ID in session
             $_SESSION['gameCode'] = $gameCode;
@@ -58,8 +93,43 @@ switch ($action) {
                 exit;
             }
             
+            // Handle photo upload
+            $photoPath = null;
+            if (isset($_FILES['playerPhoto']) && $_FILES['playerPhoto']['error'] === UPLOAD_ERR_OK) {
+                $tempName = $_FILES['playerPhoto']['tmp_name'];
+                $fileName = $_FILES['playerPhoto']['name'];
+                $fileSize = $_FILES['playerPhoto']['size'];
+                $fileType = $_FILES['playerPhoto']['type'];
+                
+                // Validate file type and size
+                $allowedTypes = ['image/jpeg', 'image/png', 'image/gif'];
+                $maxSize = 2 * 1024 * 1024; // 2MB
+                
+                if (!in_array($fileType, $allowedTypes)) {
+                    $_SESSION['error'] = "Only JPG, PNG, and GIF images are allowed.";
+                    header('Location: index.php');
+                    exit;
+                }
+                
+                if ($fileSize > $maxSize) {
+                    $_SESSION['error'] = "File size must be less than 2MB.";
+                    header('Location: index.php');
+                    exit;
+                }
+                
+                // Generate unique file name
+                $extension = pathinfo($fileName, PATHINFO_EXTENSION);
+                $newFileName = uniqid('player_') . '.' . $extension;
+                $targetPath = __DIR__ . '/data/images/' . $newFileName;
+                
+                // Move uploaded file
+                if (move_uploaded_file($tempName, $targetPath)) {
+                    $photoPath = 'data/images/' . $newFileName;
+                }
+            }
+            
             // Add player to the game
-            $playerId = $gameState->addPlayer($gameCode, $playerName);
+            $playerId = $gameState->addPlayer($gameCode, $playerName, $photoPath);
             
             if (!$playerId) {
                 $_SESSION['error'] = "Failed to join the game.";
@@ -367,6 +437,37 @@ switch ($action) {
         
         header("Location: index.php");
         exit;
+        break;
+    case 'remove_player':
+        if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+            $gameCode = $_POST['gameCode'] ?? '';
+            $hostId = $_SESSION['playerId'] ?? '';
+            $playerToRemove = $_POST['playerId'] ?? '';
+            
+            if (empty($gameCode) || empty($hostId) || empty($playerToRemove)) {
+                $_SESSION['error'] = "Missing required parameters.";
+                header("Location: index.php?action=lobby&code=$gameCode");
+                exit;
+            }
+            
+            $result = $gameState->removePlayer($gameCode, $hostId, $playerToRemove);
+            
+            if ($result['success']) {
+                $_SESSION['success'] = "Player '{$result['playerName']}' has been removed from the game.";
+                header("Location: index.php?action=lobby&code=$gameCode");
+                if ($game['phase'] !== 'lobby') {
+                    header("Location: index.php?action=game&code=$gameCode");
+                }
+            } else {
+                $_SESSION['error'] = $result['error'];
+                header("Location: index.php?action=lobby&code=$gameCode");
+            }
+            exit;
+        } else {
+            http_response_code(405);
+            echo json_encode(['error' => 'Method not allowed.']);
+            exit;
+        }
         break;
     default:
         // Default to home

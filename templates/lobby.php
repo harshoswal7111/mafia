@@ -69,49 +69,57 @@ $playerCount = count($game['players']);
     <?php endif; ?>
 
     <!-- Player list -->
-    <div class="mb-6">
-        <h3 class="text-lg font-bold mb-3 text-red-900">Players (<?php echo $playerCount; ?>)</h3>
-        <div id="playerList" class="bg-gray-50 border rounded-md p-2">
+    <div class="bg-white shadow-lg rounded-xl p-6 mb-6">
+        <h2 class="text-xl font-bold mb-4">Players</h2>
+        <div class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4">
             <?php foreach ($game['players'] as $playerId => $player): ?>
-                <div class="py-3 px-4 mb-2 rounded <?php echo ($playerId === $game['hostPlayerId']) ? 'bg-red-100' : 'bg-white'; ?> shadow-sm">
-                    <?php echo htmlspecialchars($player['name']); ?>
-                    <?php if ($playerId === $game['hostPlayerId']): ?>
-                        <span class="ml-2 text-sm font-semibold text-red-800">(Host)</span>
+            <div class="flex items-center justify-between mb-4 bg-white p-4 rounded-lg shadow">
+                <div class="flex items-center">
+                    <!-- Display player photo or initials -->
+                    <?php if (!empty($player['photoPath'])): ?>
+                        <div class="w-10 h-10 rounded-full overflow-hidden bg-gray-200 mr-3">
+                            <img src="<?php echo $player['photoPath']; ?>" alt="Profile" class="w-full h-full object-cover">
+                        </div>
+                    <?php else: ?>
+                        <div class="w-10 h-10 rounded-full flex items-center justify-center bg-blue-600 text-white font-bold mr-3">
+                            <?php 
+                            $initials = '';
+                            $nameParts = explode(' ', $player['name']);
+                            foreach ($nameParts as $part) {
+                                if (!empty($part)) {
+                                    $initials .= strtoupper(substr($part, 0, 1));
+                                    if (strlen($initials) >= 2) break;
+                                }
+                            }
+                            echo htmlspecialchars(strlen($initials) > 0 ? $initials : substr($player['name'], 0, 2));
+                            ?>
+                        </div>
                     <?php endif; ?>
-                    <?php if ($playerId === $currentPlayerId): ?>
-                        <span class="ml-2 text-sm font-semibold text-blue-600">(You)</span>
-                    <?php endif; ?>
+                    
+                    <span class="font-medium <?= $playerId === $game['hostPlayerId'] ? 'text-red-600' : '' ?>">
+                        <?= htmlspecialchars($player['name']) ?>
+                        <?php if ($playerId === $game['hostPlayerId']): ?>
+                            <span class="text-xs">(Host)</span>
+                        <?php endif; ?>
+                    </span>
                 </div>
+                
+                <?php if ($isHost && $playerId !== $currentPlayerId): ?>
+                    <form action="index.php" method="get" class="ml-4">
+                        <input type="hidden" name="action" value="remove_player">
+                        <input type="hidden" name="code" value="<?= $game['gameCode'] ?>">
+                        <input type="hidden" name="playerId" value="<?= $playerId ?>">
+                        <button type="submit" class="text-gray-500 hover:text-red-600">
+                            <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+                            </svg>
+                        </button>
+                    </form>
+                <?php endif; ?>
+            </div>
             <?php endforeach; ?>
         </div>
     </div>
-
-    <!-- Game settings display (for non-host players) -->
-    <?php if (!$isHost): ?>
-        <div class="mb-6">
-            <h3 class="text-lg font-bold mb-3 text-red-900">Game Settings</h3>
-            <ul class="list-none bg-gray-50 p-4 rounded-md">
-                <li class="py-2 border-b border-gray-200">
-                    <div class="flex justify-between">
-                        <strong>Storyteller Mode:</strong>
-                        <span><?php echo $game['settings']['storytellerMode'] ? 'Enabled' : 'Disabled'; ?></span>
-                    </div>
-                </li>
-                <li class="py-2 border-b border-gray-200">
-                    <div class="flex justify-between">
-                        <strong>Sheriff Mode:</strong> 
-                        <span><?php echo $game['settings']['sheriffMode'] ? 'Enabled' : 'Disabled'; ?></span>
-                    </div>
-                </li>
-                <li class="py-2">
-                    <div class="flex justify-between">
-                        <strong>Number of Mafia:</strong> 
-                        <span><?php echo $game['settings']['mafiaCount']; ?></span>
-                    </div>
-                </li>
-            </ul>
-        </div>
-    <?php endif; ?>
 
     <!-- Start game button (host only) -->
     <?php if ($isHost): ?>
@@ -165,9 +173,9 @@ document.addEventListener('DOMContentLoaded', function() {
         fetch('index.php?action=lobby_status&code=<?php echo $gameCode; ?>')
             .then(response => response.json())
             .then(data => {
-                // If we're in a different phase, reload the page
+                // If the game has started, navigate to the game page
                 if (data.phase !== 'lobby') {
-                    window.location.reload();
+                    window.location.href = 'index.php?action=game&code=<?php echo $gameCode; ?>';
                     return;
                 }
                 
@@ -181,29 +189,26 @@ document.addEventListener('DOMContentLoaded', function() {
                         const isCurrentPlayer = (playerId === '<?php echo $currentPlayerId; ?>');
                         
                         playerListHTML += `
-                            <div class="py-3 px-4 mb-2 rounded ${isHost ? 'bg-red-100' : 'bg-white'} shadow-sm">
-                                ${player.name}
-                                ${isHost ? '<span class="ml-2 text-sm font-semibold text-red-800">(Host)</span>' : ''}
-                                ${isCurrentPlayer ? '<span class="ml-2 text-sm font-semibold text-blue-600">(You)</span>' : ''}
+                            <div class="py-3 px-4 mb-2 rounded ${isHost ? 'bg-red-100' : 'bg-white'} shadow-sm flex justify-between items-center">
+                                <div>
+                                    ${player.name}
+                                    ${isHost ? '<span class="ml-2 text-sm font-semibold text-red-800">(Host)</span>' : ''}
+                                    ${isCurrentPlayer ? '<span class="ml-2 text-sm font-semibold text-blue-600">(You)</span>' : ''}
+                                </div>
+                                ${isHost && !isCurrentPlayer ? `
+                                    <form action="index.php?action=remove_player" method="post" class="inline" onsubmit="return confirm('Are you sure you want to remove this player?');">
+                                        <input type="hidden" name="gameCode" value="<?php echo $gameCode; ?>">
+                                        <input type="hidden" name="playerId" value="${playerId}">
+                                        <button type="submit" class="text-red-600 hover:text-red-800 font-medium text-sm">
+                                            Remove
+                                        </button>
+                                    </form>
+                                ` : ''}
                             </div>
                         `;
                     }
                     
                     playerListContainer.innerHTML = playerListHTML;
-                }
-                
-                // Update settings display for non-host players
-                if (!<?php echo $isHost ? 'true' : 'false'; ?>) {
-                    const storytellerMode = data.settings.storytellerMode ? 'Enabled' : 'Disabled';
-                    const sheriffMode = data.settings.sheriffMode ? 'Enabled' : 'Disabled';
-                    const mafiaCount = data.settings.mafiaCount;
-                    
-                    const settingsElements = document.querySelectorAll('ul.list-none li');
-                    if (settingsElements.length >= 3) {
-                        settingsElements[0].querySelector('span').textContent = storytellerMode;
-                        settingsElements[1].querySelector('span').textContent = sheriffMode;
-                        settingsElements[2].querySelector('span').textContent = mafiaCount;
-                    }
                 }
             })
             .catch(error => {
@@ -211,7 +216,10 @@ document.addEventListener('DOMContentLoaded', function() {
             });
     }
     
-    // Poll every 3 seconds
-    setInterval(pollLobbyStatus, 3000);
+    // Poll more frequently (every 1.5 seconds) to ensure game start is detected quickly
+    setInterval(pollLobbyStatus, 1500);
+    
+    // Run immediately to reduce initial waiting time
+    pollLobbyStatus();
 });
 </script>

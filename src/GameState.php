@@ -112,9 +112,10 @@ class GameState {
      * Create a new game
      * 
      * @param string $hostName The name of the host player
+     * @param string|null $photoPath The path to the host's profile photo (optional)
      * @return string The game code
      */
-    public function createGame($hostName) {
+    public function createGame($hostName, $photoPath = null) {
         $gameCode = $this->generateGameCode();
         $hostId = $this->generatePlayerId();
         
@@ -127,7 +128,8 @@ class GameState {
                     'role' => null,
                     'status' => 'alive',
                     'votedFor' => null,
-                    'nightActionTarget' => null
+                    'nightActionTarget' => null,
+                    'photoPath' => $photoPath
                 ]
             ],
             'settings' => [
@@ -169,9 +171,10 @@ class GameState {
      * 
      * @param string $gameCode The unique game code
      * @param string $playerName The name of the new player
+     * @param string|null $photoPath The path to the player's profile photo (optional)
      * @return string|bool The player ID or false if failed
      */
-    public function addPlayer($gameCode, $playerName) {
+    public function addPlayer($gameCode, $playerName, $photoPath = null) {
         $game = $this->getGame($gameCode);
         
         if (!$game) {
@@ -199,7 +202,8 @@ class GameState {
             'role' => null,
             'status' => 'alive',
             'votedFor' => null,
-            'nightActionTarget' => null
+            'nightActionTarget' => null,
+            'photoPath' => $photoPath
         ];
         
         // Save the updated game state
@@ -725,6 +729,78 @@ class GameState {
         }
         
         return ['success' => false, 'error' => 'Failed to delete game file.'];
+    }
+    
+    /**
+     * Remove a player from a game
+     * 
+     * @param string $gameCode The unique game code
+     * @param string $hostId The ID of the host player initiating the removal
+     * @param string $playerId The ID of the player to remove
+     * @return array Result of the action
+     */
+    public function removePlayer($gameCode, $hostId, $playerId) {
+        $game = $this->getGame($gameCode);
+        
+        if (!$game) {
+            return ['success' => false, 'error' => 'Game not found.'];
+        }
+        
+        // Check if the requester is the host
+        if ($game['hostPlayerId'] !== $hostId) {
+            return ['success' => false, 'error' => 'Only the host can remove players.'];
+        }
+        
+        // Check if the player exists
+        if (!isset($game['players'][$playerId])) {
+            return ['success' => false, 'error' => 'Player not found.'];
+        }
+        
+        // Don't allow host to remove themselves
+        if ($playerId === $hostId) {
+            return ['success' => false, 'error' => 'Host cannot remove themselves.'];
+        }
+        
+        // Get player name for return value
+        $playerName = $game['players'][$playerId]['name'];
+        
+        // Remove the player
+        unset($game['players'][$playerId]);
+        
+        // If we're in the night phase and this player was pending an action, remove them from actionsNeeded
+        if ($game['phase'] === 'night' && in_array($playerId, $game['actionsNeeded'])) {
+            $game['actionsNeeded'] = array_values(array_diff($game['actionsNeeded'], [$playerId]));
+            
+            // If all needed actions are now taken, process the night
+            if (empty($game['actionsNeeded'])) {
+                $this->processNightActions($game);
+                $this->checkWinConditions($game);
+                $game['phase'] = 'day_results';
+            }
+        }
+        
+        // If we're in the day_vote phase, check if all remaining players have voted
+        if ($game['phase'] === 'day_vote') {
+            $allVoted = true;
+            foreach ($game['players'] as $pId => $player) {
+                if ($player['status'] === 'alive' && $player['votedFor'] === null) {
+                    $allVoted = false;
+                    break;
+                }
+            }
+            
+            // If all have voted now, tally the votes
+            if ($allVoted) {
+                $this->tallyVotes($game);
+                $this->checkWinConditions($game);
+                $game['phase'] = 'end_day_results';
+            }
+        }
+        
+        // Save the updated game state
+        $this->saveGame($gameCode, $game);
+        
+        return ['success' => true, 'playerName' => $playerName];
     }
 }
 ?>
