@@ -58,17 +58,52 @@ switch ($action) {
                 // Move uploaded file
                 if (move_uploaded_file($tempName, $targetPath)) {
                     $photoPath = 'data/images/' . $newFileName;
+                } else {
+                    // Check for upload errors
+                    $uploadErrors = [
+                        UPLOAD_ERR_INI_SIZE => 'File exceeds upload_max_filesize in php.ini',
+                        UPLOAD_ERR_FORM_SIZE => 'File exceeds MAX_FILE_SIZE in the HTML form',
+                        UPLOAD_ERR_PARTIAL => 'File was only partially uploaded',
+                        UPLOAD_ERR_NO_FILE => 'No file was uploaded',
+                        UPLOAD_ERR_NO_TMP_DIR => 'Missing temporary folder',
+                        UPLOAD_ERR_CANT_WRITE => 'Failed to write file to disk',
+                        UPLOAD_ERR_EXTENSION => 'A PHP extension stopped the file upload'
+                    ];
+                    
+                    if (isset($uploadErrors[$_FILES['hostPhoto']['error']])) {
+                        $_SESSION['error'] = "Upload error: " . $uploadErrors[$_FILES['hostPhoto']['error']];
+                    } else {
+                        $_SESSION['error'] = "Failed to save uploaded file. Check directory permissions.";
+                    }
+                    header('Location: index.php');
+                    exit;
                 }
             }
             
-            $gameCode = $gameState->createGame($hostName, $photoPath);
-            
-            // Store game code and player ID in session
-            $_SESSION['gameCode'] = $gameCode;
-            $_SESSION['playerId'] = $gameState->getHostPlayerId($gameCode);
-            
-            header("Location: index.php?action=lobby&code=$gameCode");
-            exit;
+            try {
+                // Check if data/games directory is writable
+                $gamesDir = __DIR__ . '/data/games';
+                if (!is_writable($gamesDir)) {
+                    throw new Exception("Directory not writable: $gamesDir");
+                }
+                
+                $gameCode = $gameState->createGame($hostName, $photoPath);
+                
+                if (empty($gameCode)) {
+                    throw new Exception("Failed to create game. Game code is empty.");
+                }
+                
+                // Store game code and player ID in session
+                $_SESSION['gameCode'] = $gameCode;
+                $_SESSION['playerId'] = $gameState->getHostPlayerId($gameCode);
+                
+                header("Location: index.php?action=lobby&code=$gameCode");
+                exit;
+            } catch (Exception $e) {
+                $_SESSION['error'] = "Error creating game: " . $e->getMessage();
+                header('Location: index.php');
+                exit;
+            }
         } else {
             // If not a POST request, redirect to home
             header('Location: index.php');

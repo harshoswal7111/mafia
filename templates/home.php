@@ -2,7 +2,7 @@
 
 <div class="flex flex-col gap-6">
     <!-- Host a Game -->
-    <form action="index.php?action=create_game" method="post" class="bg-white p-6 rounded-lg shadow-lg mb-8" enctype="multipart/form-data">
+    <form action="index.php?action=host" method="post" class="bg-white p-6 rounded-lg shadow-lg mb-8" enctype="multipart/form-data">
         <h2 class="text-2xl font-bold text-red-900 mb-6">Host a New Game</h2>
         
         <div class="mb-6">
@@ -13,8 +13,8 @@
         </div>
         
         <div class="mb-6">
-            <label for="profilePhoto" class="block text-lg font-medium text-gray-700 mb-2">Profile Photo (Optional)</label>
-            <input type="file" id="profilePhoto" name="profilePhoto" accept="image/*"
+            <label for="hostPhoto" class="block text-lg font-medium text-gray-700 mb-2">Profile Photo (Optional)</label>
+            <input type="file" id="hostPhoto" name="hostPhoto" accept="image/*"
                    class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-red-500">
             <p class="mt-1 text-sm text-gray-500">Upload a profile photo or we'll use your initials.</p>
         </div>
@@ -25,7 +25,7 @@
     </form>
 
     <!-- Join a Game -->
-    <form action="index.php?action=join_game" method="post" class="bg-white p-6 rounded-lg shadow-lg" enctype="multipart/form-data">
+    <form action="index.php?action=join" method="post" class="bg-white p-6 rounded-lg shadow-lg" enctype="multipart/form-data">
         <h2 class="text-2xl font-bold text-red-900 mb-6">Join Existing Game</h2>
         
         <div class="mb-6">
@@ -43,8 +43,8 @@
         </div>
         
         <div class="mb-6">
-            <label for="joinProfilePhoto" class="block text-lg font-medium text-gray-700 mb-2">Profile Photo (Optional)</label>
-            <input type="file" id="joinProfilePhoto" name="profilePhoto" accept="image/*"
+            <label for="playerPhoto" class="block text-lg font-medium text-gray-700 mb-2">Profile Photo (Optional)</label>
+            <input type="file" id="playerPhoto" name="playerPhoto" accept="image/*"
                    class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-red-500">
             <p class="mt-1 text-sm text-gray-500">Upload a profile photo or we'll use your initials.</p>
         </div>
