@@ -359,8 +359,12 @@ class GameState {
         // If all needed actions are taken, process the night
         if (empty($game['actionsNeeded'])) {
             $this->processNightActions($game);
-            $this->checkWinConditions($game);
-            $game['phase'] = 'day_results';
+            $gameOver = $this->checkWinConditions($game);
+            
+            // Only change phase if game is not over
+            if (!$gameOver) {
+                $game['phase'] = 'day_results';
+            }
         }
         
         // Save the updated game state
@@ -388,6 +392,7 @@ class GameState {
         if (!empty($mafiaTargets)) {
             $targetCounts = array_count_values($mafiaTargets);
             arsort($targetCounts);
+            // In case of tie, take the first one (random among tied targets)
             $mafiaKill = key($targetCounts);
         }
         
@@ -403,11 +408,16 @@ class GameState {
         // Get detective investigation
         $detectiveTarget = null;
         $detectiveResult = null;
+        $detectiveId = null;
         foreach ($game['players'] as $playerId => $player) {
             if ($player['status'] === 'alive' && $player['role'] === 'detective' && $player['nightActionTarget'] !== null) {
+                $detectiveId = $playerId;
                 $detectiveTarget = $player['nightActionTarget'];
-                $targetRole = $game['players'][$detectiveTarget]['role'];
-                $detectiveResult = ($targetRole === 'mafia') ? 'mafia' : 'not_mafia';
+                // Make sure the target exists
+                if (isset($game['players'][$detectiveTarget])) {
+                    $targetRole = $game['players'][$detectiveTarget]['role'];
+                    $detectiveResult = ($targetRole === 'mafia') ? 'mafia' : 'not_mafia';
+                }
                 break; // Only one detective
             }
         }
@@ -415,8 +425,11 @@ class GameState {
         // Process kills
         $killed = null;
         if ($mafiaKill !== null && $mafiaKill !== $doctorSave) {
-            $killed = $mafiaKill;
-            $game['players'][$killed]['status'] = 'dead';
+            // Make sure the target exists and is alive
+            if (isset($game['players'][$mafiaKill]) && $game['players'][$mafiaKill]['status'] === 'alive') {
+                $killed = $mafiaKill;
+                $game['players'][$killed]['status'] = 'dead';
+            }
         }
         
         // Record the night results
@@ -424,6 +437,7 @@ class GameState {
             'night' => $game['currentNight'],
             'killed' => $killed,
             'investigation' => [
+                'detectiveId' => $detectiveId,
                 'playerId' => $detectiveTarget,
                 'result' => $detectiveResult
             ]
@@ -441,151 +455,10 @@ class GameState {
     }
     
     /**
-     * Start the voting phase
-     * 
-     * @param string $gameCode The unique game code
-     * @param string $playerId The ID of the player starting the vote
-     * @return array Result of the action
-     */
-    public function startVote($gameCode, $playerId) {
-        $game = $this->getGame($gameCode);
-        
-        if (!$game) {
-            return ['success' => false, 'error' => 'Game not found.'];
-        }
-        
-        // Check if the game is in day results phase
-        if ($game['phase'] !== 'day_results') {
-            return ['success' => false, 'error' => 'Not in day results phase.'];
-        }
-        
-        // Reset votes
-        foreach ($game['players'] as &$player) {
-            $player['votedFor'] = null;
-        }
-        
-        // Update phase
-        $game['phase'] = 'day_vote';
-        
-        // Save the updated game state
-        $this->saveGame($gameCode, $game);
-        
-        return ['success' => true];
-    }
-    
-    /**
-     * Submit a vote
-     * 
-     * @param string $gameCode The unique game code
-     * @param string $playerId The ID of the player voting
-     * @param string $targetId The ID of the target player
-     * @return array Result of the action
-     */
-    public function submitVote($gameCode, $playerId, $targetId) {
-        $game = $this->getGame($gameCode);
-        
-        if (!$game) {
-            return ['success' => false, 'error' => 'Game not found.'];
-        }
-        
-        // Check if the game is in voting phase
-        if ($game['phase'] !== 'day_vote') {
-            return ['success' => false, 'error' => 'Not in voting phase.'];
-        }
-        
-        // Check if the player is alive
-        if (!isset($game['players'][$playerId]) || $game['players'][$playerId]['status'] !== 'alive') {
-            return ['success' => false, 'error' => 'Player not alive.'];
-        }
-        
-        // Check if the target player exists
-        if (!isset($game['players'][$targetId])) {
-            return ['success' => false, 'error' => 'Target player not found.'];
-        }
-        
-        // Record the vote
-        $game['players'][$playerId]['votedFor'] = $targetId;
-        
-        // Check if all alive players have voted
-        $allVoted = true;
-        foreach ($game['players'] as $pId => $player) {
-            if ($player['status'] === 'alive' && $player['votedFor'] === null) {
-                $allVoted = false;
-                break;
-            }
-        }
-        
-        // If all have voted, tally the votes
-        if ($allVoted) {
-            $this->tallyVotes($game);
-            $this->checkWinConditions($game);
-            $game['phase'] = 'end_day_results';
-        }
-        
-        // Save the updated game state
-        $this->saveGame($gameCode, $game);
-        
-        return ['success' => true, 'allVoted' => $allVoted];
-    }
-    
-    /**
-     * Tally votes and process the lynch
-     * 
-     * @param array &$game Reference to the game data
-     */
-    private function tallyVotes(&$game) {
-        $votes = [];
-        
-        // Count votes for each player
-        foreach ($game['players'] as $playerId => $player) {
-            if ($player['status'] === 'alive' && $player['votedFor'] !== null) {
-                $targetId = $player['votedFor'];
-                
-                // Check if this player is the sheriff (their vote counts twice)
-                if (isset($game['sheriff']) && $game['sheriff'] === $playerId && $game['settings']['sheriffMode']) {
-                    $votes[$targetId] = ($votes[$targetId] ?? 0) + 2;
-                } else {
-                    $votes[$targetId] = ($votes[$targetId] ?? 0) + 1;
-                }
-            }
-        }
-        
-        // Find the player with the most votes
-        $maxVotes = 0;
-        $lynched = null;
-        $tie = false;
-        
-        foreach ($votes as $targetId => $voteCount) {
-            if ($voteCount > $maxVotes) {
-                $maxVotes = $voteCount;
-                $lynched = $targetId;
-                $tie = false;
-            } elseif ($voteCount === $maxVotes) {
-                $tie = true;
-                $lynched = null; // No lynch on tie
-            }
-        }
-        
-        // Process lynch
-        if ($lynched !== null) {
-            $game['players'][$lynched]['status'] = 'dead';
-        }
-        
-        // Record the vote results
-        $voteResults = [
-            'day' => $game['currentNight'] - 1,
-            'votes' => $votes,
-            'lynched' => $lynched,
-            'tie' => $tie
-        ];
-        
-        $game['voteResults'][$game['currentNight'] - 1] = $voteResults;
-    }
-    
-    /**
      * Check win conditions
      * 
      * @param array &$game Reference to the game data
+     * @return bool Whether the game is over
      */
     private function checkWinConditions(&$game) {
         $alivePlayers = array_filter($game['players'], function($player) {
@@ -604,53 +477,203 @@ class GameState {
         if (count($aliveMafia) >= count($aliveVillagers)) {
             $game['phase'] = 'end';
             $game['winner'] = 'mafia';
+            return true;
         }
         // Villagers win if all mafia are dead
         elseif (count($aliveMafia) === 0) {
             $game['phase'] = 'end';
             $game['winner'] = 'villagers';
+            return true;
         }
+        
+        // Game continues
+        return false;
     }
     
     /**
-     * Proceed to the next night phase
+     * Move to the next day phase (after seeing night results)
      * 
      * @param string $gameCode The unique game code
-     * @param string $playerId The ID of the player initiating
-     * @return array Result of the action
+     * @return bool Whether the operation was successful
      */
-    public function proceedToNight($gameCode, $playerId) {
+    public function nextDayPhase($gameCode) {
+        $game = $this->getGame($gameCode);
+        
+        if (!$game) {
+            return false;
+        }
+        
+        // Check if the game is in the day_results phase
+        if ($game['phase'] !== 'day_results') {
+            return false;
+        }
+        
+        // Set phase to day_discussion
+        $game['phase'] = 'day_discussion';
+        
+        // Clear any previous voting
+        foreach ($game['players'] as &$player) {
+            $player['votedFor'] = null;
+        }
+        
+        // Save the updated game state
+        return $this->saveGame($gameCode, $game);
+    }
+    
+    /**
+     * Move to the voting phase
+     * 
+     * @param string $gameCode The unique game code
+     * @return bool Whether the operation was successful
+     */
+    public function startVoting($gameCode) {
+        $game = $this->getGame($gameCode);
+        
+        if (!$game) {
+            return false;
+        }
+        
+        // Check if the game is in the day_discussion phase
+        if ($game['phase'] !== 'day_discussion') {
+            return false;
+        }
+        
+        // Set phase to day_voting
+        $game['phase'] = 'day_voting';
+        
+        // Save the updated game state
+        return $this->saveGame($gameCode, $game);
+    }
+    
+    /**
+     * Cast a vote during the day voting phase
+     * 
+     * @param string $gameCode The unique game code
+     * @param string $playerId The ID of the player voting
+     * @param string $targetId The ID of the player being voted for
+     * @return array Result of the vote
+     */
+    public function submitVote($gameCode, $playerId, $targetId) {
         $game = $this->getGame($gameCode);
         
         if (!$game) {
             return ['success' => false, 'error' => 'Game not found.'];
         }
         
-        // Check if the game is in end day results phase
-        if ($game['phase'] !== 'end_day_results') {
-            return ['success' => false, 'error' => 'Not in end day results phase.'];
+        // Check if the game is in day_voting phase
+        if ($game['phase'] !== 'day_voting') {
+            return ['success' => false, 'error' => 'Not voting phase.'];
         }
         
-        // Reset night actions
-        foreach ($game['players'] as &$player) {
-            $player['nightActionTarget'] = null;
+        // Check if the player is alive
+        if (!isset($game['players'][$playerId]) || $game['players'][$playerId]['status'] !== 'alive') {
+            return ['success' => false, 'error' => 'Player not alive.'];
         }
         
-        // Determine which players need to take night actions
-        $game['actionsNeeded'] = [];
-        foreach ($game['players'] as $playerId => $player) {
-            if ($player['status'] === 'alive' && in_array($player['role'], ['mafia', 'doctor', 'detective'])) {
-                $game['actionsNeeded'][] = $playerId;
+        // Check if the target player exists and is alive
+        if (!isset($game['players'][$targetId]) || $game['players'][$targetId]['status'] !== 'alive') {
+            return ['success' => false, 'error' => 'Target player not alive.'];
+        }
+        
+        // Record the vote
+        $game['players'][$playerId]['votedFor'] = $targetId;
+        
+        // Check if all alive players have voted
+        $allVoted = true;
+        foreach ($game['players'] as $pid => $player) {
+            if ($player['status'] === 'alive' && $player['votedFor'] === null) {
+                $allVoted = false;
+                break;
             }
         }
         
-        // Update phase
-        $game['phase'] = 'night';
+        // If all have voted, process the votes
+        if ($allVoted) {
+            $this->processVotes($game);
+            $gameOver = $this->checkWinConditions($game);
+            
+            // Only change phase if game is not over
+            if (!$gameOver) {
+                // Set up night phase
+                $game['phase'] = 'night';
+                $game['actionsNeeded'] = [];
+                
+                // Determine which players need to take night actions
+                foreach ($game['players'] as $pid => $player) {
+                    if ($player['status'] === 'alive' && in_array($player['role'], ['mafia', 'doctor', 'detective'])) {
+                        $game['actionsNeeded'][] = $pid;
+                    }
+                }
+            }
+        }
         
         // Save the updated game state
         $this->saveGame($gameCode, $game);
         
-        return ['success' => true];
+        return ['success' => true, 'allVoted' => $allVoted];
+    }
+    
+    /**
+     * Process all votes during the day voting phase
+     * 
+     * @param array &$game Reference to the game data
+     */
+    private function processVotes(&$game) {
+        // Collect all votes
+        $votes = [];
+        foreach ($game['players'] as $playerId => $player) {
+            if ($player['status'] === 'alive' && $player['votedFor'] !== null) {
+                // Check if sheriff mode is enabled and this player is sheriff
+                if (isset($game['settings']['sheriffMode']) && 
+                    $game['settings']['sheriffMode'] && 
+                    isset($game['sheriff']) && 
+                    $playerId === $game['sheriff']) {
+                    // Sheriff's vote counts twice
+                    $votes[] = $player['votedFor'];
+                    $votes[] = $player['votedFor'];
+                } else {
+                    $votes[] = $player['votedFor'];
+                }
+            }
+        }
+        
+        // Count votes for each player
+        $voteCounts = array_count_values($votes);
+        arsort($voteCounts);
+        
+        // Get the player(s) with the most votes
+        $maxVotes = reset($voteCounts);
+        $mostVoted = [];
+        foreach ($voteCounts as $pid => $count) {
+            if ($count === $maxVotes) {
+                $mostVoted[] = $pid;
+            } else {
+                break; // We've gone past the max count
+            }
+        }
+        
+        // Handle the vote result
+        $eliminated = null;
+        if (count($mostVoted) === 1) {
+            // Clear majority - player is eliminated
+            $eliminated = $mostVoted[0];
+            $game['players'][$eliminated]['status'] = 'dead';
+        }
+        // If there's a tie, no one is eliminated
+        
+        // Record the vote results
+        $voteResults = [
+            'day' => $game['currentNight'] - 1, // The day number corresponds to the night before
+            'votes' => $voteCounts,
+            'eliminated' => $eliminated
+        ];
+        
+        $game['voteResults'][$game['currentNight'] - 1] = $voteResults;
+        
+        // Reset all votes
+        foreach ($game['players'] as &$player) {
+            $player['votedFor'] = null;
+        }
     }
     
     /**

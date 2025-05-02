@@ -11,6 +11,9 @@ $action = $_GET['action'] ?? 'home';
 // Initialize GameState
 $gameState = new GameState();
 
+// Start output buffering to capture the content
+ob_start();
+
 // Route to appropriate handler based on action
 switch ($action) {
     case 'home':
@@ -509,4 +512,10 @@ switch ($action) {
         require 'templates/home.php';
         break;
 }
+
+// Capture the content and clean the buffer
+$content = ob_get_clean();
+
+// Include the layout template, which will use the captured content
+require 'templates/layout.php';
 ?>

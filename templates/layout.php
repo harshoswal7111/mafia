@@ -69,7 +69,10 @@
             <?php unset($_SESSION['success']); ?>
         <?php endif; ?>
 
-        <?php /* Main content will be inserted here */ ?>
+        <?php 
+        // Output the main content that was captured in the buffer
+        echo $content; 
+        ?>
         
     </div>
 

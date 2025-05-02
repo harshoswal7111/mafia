@@ -1,5 +1,3 @@
-<?php require_once 'templates/layout.php'; ?>
-
 <?php
 // Get current player ID and game data
 $currentPlayerId = $_SESSION['playerId'] ?? '';

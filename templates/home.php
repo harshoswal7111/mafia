@@ -1,4 +1,6 @@
-<?php require_once 'templates/layout.php'; ?>
+<div class="bg-white p-6 rounded-lg shadow-md mb-6">
+    <h2 class="text-3xl font-extrabold text-red-900 mb-6 text-center">Mafia Game Facilitator</h2>
+</div>
 
 <div class="flex flex-col gap-6">
     <!-- Host a Game -->
