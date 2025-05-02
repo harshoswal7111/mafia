@@ -5,6 +5,73 @@ session_start();
 // Include core functionality
 require_once 'src/GameState.php';
 
+// Initialize required directories with proper permissions
+function initializeDirectories() {
+    $requiredDirs = [
+        __DIR__ . '/data',
+        __DIR__ . '/data/games',
+        __DIR__ . '/data/images'
+    ];
+    
+    foreach ($requiredDirs as $dir) {
+        if (!file_exists($dir)) {
+            if (!mkdir($dir, 0755, true)) {
+                error_log("Failed to create directory: $dir");
+                return false;
+            }
+            // Set proper permissions for new directories
+            chmod($dir, 0755);
+        } elseif (!is_writable($dir)) {
+            if (!chmod($dir, 0755)) {
+                error_log("Failed to set permissions on directory: $dir");
+                return false;
+            }
+        }
+    }
+    return true;
+}
+
+// Call this function at the beginning to ensure directories exist
+initializeDirectories();
+
+// Ensure required directories exist and are writable
+function ensureDirectoryExists($path) {
+    if (!file_exists($path)) {
+        // Try to create the directory with full permissions
+        if (!mkdir($path, 0755, true)) {
+            error_log("Failed to create directory: $path");
+            return false;
+        }
+    } elseif (!is_dir($path)) {
+        error_log("Path exists but is not a directory: $path");
+        return false;
+    }
+    
+    // Check if the directory is writable
+    if (!is_writable($path)) {
+        // Try to make it writable
+        if (!chmod($path, 0755)) {
+            error_log("Failed to make directory writable: $path");
+            return false;
+        }
+    }
+    
+    return true;
+}
+
+// Ensure data directories exist
+$dataDir = __DIR__ . '/data';
+$gamesDir = $dataDir . '/games';
+$imagesDir = $dataDir . '/images';
+
+$directoriesOk = true;
+foreach ([$dataDir, $gamesDir, $imagesDir] as $dir) {
+    if (!ensureDirectoryExists($dir)) {
+        $directoriesOk = false;
+        $_SESSION['error'] = "Failed to create or access required directories. Check permissions.";
+    }
+}
+
 // Determine action based on URL parameters
 $action = $_GET['action'] ?? 'home';
 
@@ -85,9 +152,8 @@ switch ($action) {
             
             try {
                 // Check if data/games directory is writable
-                $gamesDir = __DIR__ . '/data/games';
-                if (!is_writable($gamesDir)) {
-                    throw new Exception("Directory not writable: $gamesDir");
+                if (!$directoriesOk) {
+                    throw new Exception("Required directories are not accessible.");
                 }
                 
                 $gameCode = $gameState->createGame($hostName, $photoPath);
@@ -204,30 +270,83 @@ switch ($action) {
         require 'templates/lobby.php';
         break;
     case 'lobby_status':
+        // API endpoint for polling lobby state updates
         $gameCode = $_GET['code'] ?? '';
-        if (empty($gameCode)) {
-            http_response_code(400);
-            echo json_encode(['error' => 'Game code is required.']);
+        if (empty($gameCode) || !isset($_SESSION['playerId'])) {
+            header('Content-Type: application/json');
+            echo json_encode(['error' => 'Invalid request']);
             exit;
         }
         
-        $game = $gameState->getGame($gameCode);
+        $game = GameState::loadGame($gameCode);
         if (!$game) {
-            http_response_code(404);
-            echo json_encode(['error' => 'Game not found.']);
+            header('Content-Type: application/json');
+            echo json_encode(['error' => 'Game not found']);
             exit;
         }
         
-        // Return minimal needed lobby data for polling
-        $lobbyData = [
-            'players' => $game['players'],
-            'settings' => $game['settings'],
-            'phase' => $game['phase']
+        // Return minimal game state information for polling
+        header('Content-Type: application/json');
+        echo json_encode([
+            'phase' => $game['phase'],
+            'players' => array_map(function($player) {
+                return [
+                    'id' => $player['id'],
+                    'name' => $player['name']
+                ];
+            }, $game['players']),
+            'settings' => $game['settings']
+        ]);
+        exit;
+    case 'get_lobby_status':
+        $gameCode = $_GET['gameCode'] ?? '';
+        
+        if (empty($gameCode)) {
+            echo json_encode(['success' => false, 'message' => 'Game code is required']);
+            exit;
+        }
+        
+        // Get game data
+        $gameFile = "data/games/{$gameCode}.json";
+        if (!file_exists($gameFile)) {
+            echo json_encode(['success' => false, 'message' => 'Game not found']);
+            exit;
+        }
+        
+        $game = json_decode(file_get_contents($gameFile), true);
+        
+        // Prepare response data
+        $response = [
+            'success' => true,
+            'gameStarted' => $game['status'] !== 'lobby',
+            'players' => []
         ];
         
+        // Add player data
+        foreach ($game['players'] as $playerId => $player) {
+            $photoPath = '';
+            if (!empty($player['photoPath'])) {
+                $photoPath = $player['photoPath'];
+            }
+            
+            $response['players'][] = [
+                'id' => $playerId,
+                'name' => $player['name'],
+                'photoPath' => $photoPath
+            ];
+        }
+        
+        // Add game settings
+        $response['settings'] = [
+            'dayTime' => $game['settings']['dayTime'] ?? 300,
+            'nightTime' => $game['settings']['nightTime'] ?? 60,
+            'mafiaPercentage' => $game['settings']['mafiaPercentage'] ?? 30
+        ];
+        
+        // Return JSON response
         header('Content-Type: application/json');
-        echo json_encode($lobbyData);
-        break;
+        echo json_encode($response);
+        exit;
     case 'update_settings':
         if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $gameCode = $_POST['gameCode'] ?? '';
@@ -298,9 +417,36 @@ switch ($action) {
                 exit;
             }
             
-            // Start the game
-            $gameState->startGame($gameCode);
+            // Make sure nothing has been output yet that would prevent redirect
+            if (headers_sent($file, $line)) {
+                // Log the error or handle it
+                error_log("Headers already sent in $file on line $line");
+                // Use JavaScript redirect as a fallback
+                echo "<script>window.location.href = 'index.php?action=game&code=$gameCode';</script>";
+                exit;
+            }
             
+            // Start the game
+            $result = $gameState->startGame($gameCode);
+            
+            if (!$result) {
+                $_SESSION['error'] = "Failed to start the game.";
+                header("Location: index.php?action=lobby&code=$gameCode");
+                exit;
+            }
+            
+            // Double-check that game phase was updated correctly
+            $updatedGame = $gameState->getGame($gameCode);
+            if ($updatedGame['phase'] !== 'night') {
+                $_SESSION['error'] = "Game phase was not updated correctly.";
+                header("Location: index.php?action=lobby&code=$gameCode");
+                exit;
+            }
+            
+            // Clear output buffer before redirect
+            if (ob_get_length()) ob_clean();
+            
+            // Redirect to game page
             header("Location: index.php?action=game&code=$gameCode");
             exit;
         } else {

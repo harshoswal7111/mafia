@@ -586,118 +586,106 @@ $mafiaPlayers = array_filter($game['players'], function($player) {
     </div>
 </div>
 
-<!-- JavaScript for AJAX actions -->
+<!-- Game JS for updates and actions -->
 <script>
-document.addEventListener('DOMContentLoaded', function() {
-    // Mobile optimized radio button behavior (highlight selected items)
-    document.querySelectorAll('input[type="radio"]').forEach(radio => {
-        radio.addEventListener('change', function() {
-            // First remove highlight from all labels
-            this.closest('form').querySelectorAll('label').forEach(label => {
-                label.classList.remove('border-indigo-500', 'border-yellow-500', 'bg-indigo-50', 'bg-yellow-50');
-                label.classList.add('border-gray-300');
-            });
-            
-            // Then highlight the selected one
-            if (this.checked) {
-                const parentLabel = this.closest('label');
-                if (this.name === 'targetId' && this.form.id === 'nightActionForm') {
-                    parentLabel.classList.add('border-indigo-500', 'bg-indigo-50');
-                    parentLabel.classList.remove('border-gray-300');
-                } else if (this.name === 'targetId' && this.form.id === 'voteForm') {
-                    parentLabel.classList.add('border-yellow-500', 'bg-yellow-50');
-                    parentLabel.classList.remove('border-gray-300');
-                }
-            }
-        });
-    });
+    // Poll game state every 3 seconds
+    let gameRefreshTimer;
+    let lastGameState = '<?php echo $phase; ?>';
+    let currentNight = <?php echo $game['currentNight'] ?? 1; ?>;
     
-    // Night action form submission
-    const nightActionForm = document.getElementById('nightActionForm');
-    if (nightActionForm) {
-        nightActionForm.addEventListener('submit', function(e) {
-            e.preventDefault();
-            
-            const formData = new FormData(nightActionForm);
-            
-            fetch('index.php?action=submit_action', {
-                method: 'POST',
-                body: formData
-            })
-            .then(response => response.json())
-            .then(data => {
-                if (data.success) {
-                    const actionMessage = document.getElementById('actionMessage');
-                    actionMessage.innerHTML = '<div class="p-4 bg-green-100 border border-green-400 text-green-700 rounded-lg text-center">Action submitted successfully! Please wait for others.</div>';
-                    actionMessage.classList.remove('hidden');
-                    
-                    // Reload the page after a short delay
-                    setTimeout(() => {
-                        window.location.reload();
-                    }, 1500);
-                } else {
-                    const actionMessage = document.getElementById('actionMessage');
-                    actionMessage.innerHTML = `<div class="p-4 bg-red-100 border border-red-400 text-red-700 rounded-lg text-center">Error: ${data.error}</div>`;
-                    actionMessage.classList.remove('hidden');
-                }
-            })
-            .catch(error => {
-                console.error('Error submitting night action:', error);
-            });
-        });
-    }
-    
-    // Vote form submission
-    const voteForm = document.getElementById('voteForm');
-    if (voteForm) {
-        voteForm.addEventListener('submit', function(e) {
-            e.preventDefault();
-            
-            const formData = new FormData(voteForm);
-            
-            fetch('index.php?action=submit_vote', {
-                method: 'POST',
-                body: formData
-            })
-            .then(response => response.json())
-            .then(data => {
-                if (data.success) {
-                    const voteMessage = document.getElementById('voteMessage');
-                    voteMessage.innerHTML = '<div class="p-4 bg-green-100 border border-green-400 text-green-700 rounded-lg text-center">Vote submitted successfully!</div>';
-                    voteMessage.classList.remove('hidden');
-                    
-                    // Reload the page after voting or if all have voted
-                    setTimeout(() => {
-                        window.location.reload();
-                    }, data.allVoted ? 1500 : 1000);
-                } else {
-                    const voteMessage = document.getElementById('voteMessage');
-                    voteMessage.innerHTML = `<div class="p-4 bg-red-100 border border-red-400 text-red-700 rounded-lg text-center">Error: ${data.error}</div>`;
-                    voteMessage.classList.remove('hidden');
-                }
-            })
-            .catch(error => {
-                console.error('Error submitting vote:', error);
-            });
-        });
-    }
-    
-    // Auto-refresh game state
     function pollGameState() {
-        fetch('index.php?action=lobby_status&code=<?php echo $gameCode; ?>')
+        fetch('index.php?action=get_game_state&gameCode=<?php echo $gameCode; ?>')
             .then(response => response.json())
             .then(data => {
-                // If phase changed, reload the page
-                if (data.phase !== '<?php echo $phase; ?>') {
-                    window.location.reload();
+                // Check if there's been a phase change or relevant update
+                if (data.phase !== lastGameState || 
+                    data.currentNight !== currentNight ||
+                    JSON.stringify(data.votes) !== JSON.stringify(<?php echo json_encode($game['votes'] ?? []); ?>) ||
+                    JSON.stringify(data.actionsNeeded) !== JSON.stringify(<?php echo json_encode($game['actionsNeeded'] ?? []); ?>)) {
+                    
+                    console.log('Game state changed, refreshing...');
+                    location.reload();
                 }
+                
+                lastGameState = data.phase;
+                currentNight = data.currentNight;
             })
             .catch(error => {
                 console.error('Error polling game state:', error);
             });
     }
-    
-    // Poll every 3 seconds
-    setInterval(pollGameState, 3000);
-});
+
+    // Start polling when page loads
+    document.addEventListener('DOMContentLoaded', function() {
+        // Handle night action form submission
+        const nightActionForm = document.getElementById('nightActionForm');
+        if (nightActionForm) {
+            nightActionForm.addEventListener('submit', function(e) {
+                e.preventDefault();
+                const formData = new FormData(nightActionForm);
+                
+                fetch('index.php?action=submit_night_action', {
+                    method: 'POST',
+                    body: formData
+                })
+                .then(response => response.json())
+                .then(data => {
+                    const messageDiv = document.getElementById('actionMessage');
+                    messageDiv.classList.remove('hidden');
+                    
+                    if (data.success) {
+                        messageDiv.classList.add('text-green-600');
+                        messageDiv.innerHTML = 'Action submitted successfully!';
+                        location.reload();
+                    } else {
+                        messageDiv.classList.add('text-red-600');
+                        messageDiv.innerHTML = data.error || 'Failed to submit action. Please try again.';
+                    }
+                })
+                .catch(error => {
+                    console.error('Error submitting night action:', error);
+                });
+            });
+        }
+        
+        // Handle vote form submission
+        const voteForm = document.getElementById('voteForm');
+        if (voteForm) {
+            voteForm.addEventListener('submit', function(e) {
+                e.preventDefault();
+                const formData = new FormData(voteForm);
+                
+                fetch('index.php?action=submit_vote', {
+                    method: 'POST',
+                    body: formData
+                })
+                .then(response => response.json())
+                .then(data => {
+                    const messageDiv = document.getElementById('voteMessage');
+                    messageDiv.classList.remove('hidden');
+                    
+                    if (data.success) {
+                        messageDiv.classList.add('text-green-600');
+                        messageDiv.innerHTML = 'Vote submitted successfully!';
+                        location.reload();
+                    } else {
+                        messageDiv.classList.add('text-red-600');
+                        messageDiv.innerHTML = data.error || 'Failed to submit vote. Please try again.';
+                    }
+                })
+                .catch(error => {
+                    console.error('Error submitting vote:', error);
+                });
+            });
+        }
+        
+        // Start the polling timer
+        gameRefreshTimer = setInterval(pollGameState, 3000);
+    });
+
+    // Clean up when leaving the page
+    window.addEventListener('beforeunload', function() {
+        clearInterval(gameRefreshTimer);
+    });
 </script>
+</div> <!-- Close the bg-white div -->

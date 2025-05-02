@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <meta name="viewport" content="width=device-width, maximum-scale=1.0, user-scalable=no">
     <title>Mafia Game Facilitator</title>
     <!-- Favicon -->
     <link rel="icon" href="https://cdn-icons-png.flaticon.com/512/1940/1940953.png" type="image/png">
@@ -79,5 +79,111 @@
     <footer class="bg-gray-800 text-white text-center p-4 mt-auto text-sm">
         <p>&copy; <?php echo date('Y'); ?> Harsh Oswal</p>
     </footer>
+
+    <?php if (isset($gameCode)): ?>
+    <script>
+    // Auto-refresh functionality
+    let lastGameState = '';
+    let refreshInterval = 3000; // Poll every 3 seconds
+    let refreshTimer;
+    let consecutiveErrors = 0;
+    let maxErrors = 5;
+
+    function pollGameState() {
+        const gameCode = '<?php echo $gameCode ?? ''; ?>';
+        if (!gameCode) return;
+        
+        fetch(`index.php?action=get_game_state&gameCode=${gameCode}&timestamp=${Date.now()}`, {
+            method: 'GET',
+            headers: {
+                'Cache-Control': 'no-cache'
+            }
+        })
+        .then(response => {
+            if (!response.ok) {
+                throw new Error('Network response was not ok');
+            }
+            consecutiveErrors = 0; // Reset error counter on success
+            return response.json();
+        })
+        .then(data => {
+            if (!data) return;
+            
+            // Check if game state has changed by comparing a stringified version of the data
+            const gameStateString = JSON.stringify({
+                phase: data.phase,
+                currentNight: data.currentNight,
+                actionsNeeded: data.actionsNeeded,
+                players: data.players
+            });
+            
+            if (gameStateString !== lastGameState) {
+                lastGameState = gameStateString;
+                console.log('Game state changed, refreshing...');
+                window.location.reload();
+                return;
+            }
+            
+            // Check for specific changes that should trigger a refresh
+            if (window.location.href.includes('game') && data) {
+                let shouldRefresh = false;
+                
+                // Check if we're on a night phase and all actions are submitted
+                if (data.phase === 'night' && data.actionsNeeded && data.actionsNeeded.length === 0) {
+                    shouldRefresh = true;
+                }
+                
+                // Check if we're on a day voting phase and everyone has voted
+                if (data.phase === 'day_vote') {
+                    const alivePlayers = Object.values(data.players).filter(player => player.status === 'alive');
+                    const votedPlayers = alivePlayers.filter(player => player.votedFor !== null);
+                    
+                    if (alivePlayers.length === votedPlayers.length) {
+                        shouldRefresh = true;
+                    }
+                }
+                
+                if (shouldRefresh) {
+                    console.log('Game state condition met for refresh');
+                    window.location.reload();
+                    return;
+                }
+            }
+        })
+        .catch(error => {
+            console.error('Error polling game state:', error);
+            consecutiveErrors++;
+            
+            // If we have too many consecutive errors, slow down the polling to reduce load
+            if (consecutiveErrors > maxErrors) {
+                clearInterval(refreshTimer);
+                refreshInterval = 10000; // Slow down to 10 seconds
+                refreshTimer = setInterval(pollGameState, refreshInterval);
+                console.log('Too many errors, slowing down refresh rate');
+            }
+        });
+    }
+
+    // Start polling when the page loads
+    document.addEventListener('DOMContentLoaded', function() {
+        // Start the polling timer
+        refreshTimer = setInterval(pollGameState, refreshInterval);
+        
+        // Also poll immediately
+        pollGameState();
+        
+        // Pause polling when tab is not visible to save resources
+        document.addEventListener('visibilitychange', function() {
+            if (document.hidden) {
+                clearInterval(refreshTimer);
+            } else {
+                // Resume polling and do an immediate check when returning to the page
+                refreshTimer = setInterval(pollGameState, refreshInterval);
+                pollGameState();
+            }
+        });
+    });
+    </script>
+    <?php endif; ?>
 </body>
 </html>
